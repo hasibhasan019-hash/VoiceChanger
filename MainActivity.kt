@@ -96,25 +96,32 @@ class MainActivity : Activity() {
     }
 
     private fun startAudio() {
-        running = true
-        btn.text = "STOP"
-        worker = Thread {
+    running = true
+    btn.text = "STOP"
+    worker = Thread {
+        var rec: AudioRecord? = null
+        var track: AudioTrack? = null
+        try {
             val minIn = AudioRecord.getMinBufferSize(
                 sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             val minOut = AudioTrack.getMinBufferSize(
                 sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            val rec = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, sampleRate,
+
+            rec = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minIn * 2)
-            val track = AudioTrack.Builder()
+            if (rec.state != AudioRecord.STATE_INITIALIZED) {
+                throw IllegalStateException("Mic chalu hoy ni")
+            }
+
+            track = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                 .setAudioFormat(AudioFormat.Builder()
                     .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                     .setSampleRate(sampleRate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                 .setBufferSizeInBytes(minOut * 2)
-                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build()
 
             val frame = ShortArray(512)
@@ -128,15 +135,25 @@ class MainActivity : Activity() {
                 }
                 track.write(frame, 0, n)
             }
-            rec.stop(); rec.release(); track.stop(); track.release()
-        }.also { it.start() }
-    }
-
+        } catch (e: Exception) {
+            running = false
+            runOnUiThread {
+                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                btn.text = "START"
+            }
+        } finally {
+            try { rec?.stop() } catch (_: Exception) {}
+            rec?.release()
+            try { track?.stop() } catch (_: Exception) {}
+            track?.release()
+        }
+    }.also { it.start() }
+}
+    
     private fun stopAudio() {
-        running = false
-        worker?.join()
-        btn.text = "START"
-    }
+    running = false
+    btn.text = "START"
+}
 
     override fun onDestroy() { running = false; super.onDestroy() }
 }
